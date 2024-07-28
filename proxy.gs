@@ -64,8 +64,17 @@ libs.corruptLog = function(fileObject) //overwrite system.log by copy the smalle
     return tryCopy
 end function
 
+secure = function(rootFolder)
+    if not rootFolder then return print("/ not found.")
+    rootFolder.set_group("root", true)
+    rootFolder.set_owner("root", true)
+    rootFolder.chmod("u-rwx", true)
+    rootFolder.chmod("g-rwx", true)
+    rootFolder.chmod("o-rwx", true)
+end function
+
 proxies = (#envar PROXIES).split(",")
-print("Using "+proxies.len+" proxies...")
+
 shell = get_shell
 
 for proxy in proxies
@@ -73,8 +82,11 @@ for proxy in proxies
   ip = creds[0]
   pass = creds[1]
   shell = shell.connect_service(ip, 22, "root", pass)
-  corrupted = libs.corruptLog(shell.host_computer.File("/"))
+  rootDir = shell.host_computer.File("/")
+  secure(rootDir)
+  corrupted = libs.corruptLog(rootDir)
   if corrupted != 1 then return print("Failed to corrupt logs.")
 end for
 
+print("Proxy Hops: " + proxies.len)
 shell.start_terminal
