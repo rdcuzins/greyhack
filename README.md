@@ -1,12 +1,25 @@
-# rocShell
-A tool for the game [Grey Hack](https://store.steampowered.com/app/605230/Grey_Hack/).
+# GreyHack
+This is a collection of tools for the game [GreyHack](https://greyhackgame.com/)
 
-Has a built-in text editor.
+## Vs-Code Plugin
+I currently am using the [greybel-vs](https://github.com/ayecue/greybel-vs) and have a nice setup to auto build an installer and inject it into the game. 
 
-I made this with code from [NamelessOS](https://github.com/Nameless9000/NamelessOS) and [Exploit suite 0.9](https://github.com/Darkvalnar/greyscript/blob/master/suite/Exploit%20Suite%200.9.js)
+### Settings
+In the vscode settings, a password needs to be set in the settings under *greybel.transpiler.environmentVariables*. 
+Here is the full settings I use for the plugin:
 
-It has been completely rewrote, if you find any bug, please report to issues.
+```json
+    "greybel.createIngame.agent": "message-hook",
+    "greybel.transpiler.installer.autoCompile": true,
+    "greybel.createIngame.autoCompile": true,
+    "greybel.createIngame.active": true,
+    "greybel.createIngame.steamUser": "",
+    "greybel.transpiler.environmentVariables": {
+        "PROXIES": "123.123.123.123:secret,122.122.122.122:secret2",
+        "ZSH_PASS": "zsh_secret",
+        "PROXY_PASS": "proxy_secret"
+    }
+```
 
-credit goes to [Nameless9000](https://github.com/Nameless9000) and [Darkvalnar](https://github.com/Darkvalnar)
-
-update 20231103: rocShell without api will no longer be updated. rocShell.gs now contains API. Remove it yourself if you dont want to use it. If you use it in singleplayer, API will be disabled automatically.
+# Credits
+Thanks to [rocketorbit](https://github.com/rocketorbit/rocShell) for having an open source shell to learn/borrow from.
