@@ -1,5 +1,5 @@
 libFiles = ["metaxploit.so", "crypto.so", "librshell.so"]
-binFiles = ["AdminMonitor.exe", "sniffer", "decipher", "zsh", "dropper", "top"]
+binFiles = ["ScanLan.exe", "AdminMonitor.exe", "sniffer", "decipher", "zsh", "dropper", "top", "rshell-server"]
 
 total = 0
 localShell = get_shell
