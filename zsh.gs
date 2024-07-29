@@ -1,6 +1,20 @@
 // Exit if password is incorrect. This is managed by vs-code pluin. Check README.
 if params.len != 1 or params[0] != #envar ZSH_PASS then exit 
 
+// Imports
+import_code("lib/corruptLog.gs")
+import_code("lib/allFiles.gs")
+import_code("lib/getFile.gs")
+import_code("lib/absolutePath.gs")
+import_code("lib/changeDir.gs")
+import_code("lib/find.gs")
+import_code("lib/toFile.gs")
+import_code("lib/checkAccess.gs")
+import_code("lib/checkIp.gs")
+import_code("lib/fileSize.gs")
+import_code("lib/scanLib.gs")
+import_code("lib/typeofFile.gs")
+
 clear_screen
 
 {"ver":"0.1.0"} 
@@ -45,215 +59,6 @@ current.isLocal = local.isLocal
 
 objects = []
 
-libs = {}
-libs.absolutePath = function(rPath, cPath) //current path + relative path = absolute path
-    if rPath.len == 0 then return print("invalid path.")
-    if rPath[0] == "/" then return rPath
-    if cPath.len == 0 then return print("invalid path.")
-    if not cPath[0] == "/" then return print("invalid path.")
-    if not cPath[-1] == "/" then cPath = cPath + "/"
-    absPath = cPath + rPath
-    while absPath.len > 1 and absPath[-1] == "/"
-        absPath = absPath[:-1]
-    end while
-    return absPath
-end function
-libs.changeDir = function(toPath, fileObject) //go to another dir
-    if not fileObject then fileObject = globals.current.folder
-    while fileObject.parent
-        fileObject = fileObject.parent
-    end while
-    if toPath.len == 0 then return print("File not found.")
-    while (toPath.len > 1) and (toPath[-1] == "/") //trim end "/"
-        toPath = toPath[:-1]
-    end while
-    while (toPath.len > 1) and (toPath[0] == "/") //trim start "/"
-        toPath = toPath[1:]
-    end while
-    if toPath == "/" then return fileObject
-    toPath = toPath.split("/")
-    for p in toPath
-        found = false
-        for f in fileObject.get_folders
-            if not f.name == p then continue
-            found = true
-            fileObject = f
-            break
-        end for
-        if not found then return print("Folder not found.")
-    end for
-    if not fileObject.is_folder then return print("Folder not found.")
-    return fileObject
-end function
-libs.getFile = function(toPath, fileObject) //changeDir only support folder but this works for both
-    if not fileObject then fileObject = globals.current.folder
-    while fileObject.parent
-        fileObject = fileObject.parent
-    end while
-    if toPath.len == 0 then return print("File not found.")
-    while (toPath.len > 1) and (toPath[-1] == "/") //trim end "/"
-        toPath = toPath[:-1]
-    end while
-    while (toPath.len > 1) and (toPath[0] == "/") //trim start "/"
-        toPath = toPath[1:]
-    end while
-    if toPath == "/" then return fileObject
-    toPath = toPath.split("/")
-    for i in toPath.indexes
-        found = false
-        if i == (toPath.len - 1) then
-            for f in fileObject.get_folders + fileObject.get_files
-                if not f.name == toPath[i] then continue
-                return f
-            end for
-            return print("File not found")
-        end if
-        for f in fileObject.get_folders
-            if not f.name == toPath[i] then continue
-            found = true
-            fileObject = f
-            break
-        end for
-        if not found then return print("File not found.")
-    end for
-    return fileObject
-end function
-libs.allFiles = function(fileObject, maxDepth = -1)
-    if fileObject.is_folder then total = {"ret":[fileObject], "stack":[maxDepth, fileObject]} else return [fileObject]
-    while total.stack
-        c = {"folder":total.stack.pop, "maxDepth":total.stack.pop}
-        if c.maxDepth then total.ret = total.ret + c.folder.get_folders + c.folder.get_files else continue
-        folders = c.folder.get_folders
-        for i in range(len(folders) - 1)
-            if folders then [total.stack.push(c.maxDepth - 1), total.stack.push(folders[i])] else break
-        end for
-    end while
-    return total.ret
-end function
-libs.find = function(fileName, fileObject) //find files under a dir
-    founded = []
-    files = self.allFiles(fileObject)
-    for file in files
-        if lower(file.name).indexOf(lower(fileName)) != null then founded = founded + [file]
-    end for
-    return founded
-end function
-libs.toFile = function(anyObject)
-    if typeof(anyObject) == "shell" then return anyObject.host_computer.File("/")
-    if typeof(anyObject) == "computer" then return anyObject.File("/")
-    if typeof(anyObject) == "file" then
-        while anyObject.parent
-            anyObject = anyObject.parent
-        end while
-        return anyObject
-    end if
-    return null
-end function
-libs.checkAccess = function(fileObject) //check perm for npc machine
-    if not typeof(fileObject) == "file" then return null
-    while fileObject.parent
-        fileObject = fileObject.parent
-    end while
-    homeFolder = null
-    for folder in fileObject.get_folders
-        if folder.name == "root" then
-            if folder.has_permission("w") and folder.has_permission("r") and folder.has_permission("x") then return "root"
-        end if
-        if folder.name == "home" then
-            homeFolder = folder
-        end if
-    end for
-    if not homeFolder then return "guest"
-    for folder in homeFolder.get_folders
-        if folder.name == "guest" then continue
-        if folder.has_permission("w") and folder.has_permission("r") and folder.has_permission("x") then return folder.name
-    end for
-    return "guest"
-end function
-libs.checkIp = function(anyObject, targetIp, targetPort, currentRouter)
-    if typeof(anyObject) != "shell" and typeof(anyObject) != "computer" and typeof(anyObject) != "file" then return null
-    if not is_valid_ip(targetIp) then return null
-    if typeof(targetPort) != "number" then return null
-    if typeof(currentRouter) != "router" then return null
-    if typeof(anyObject) == "shell" then return {"localIp":anyObject.host_computer.local_ip, "publicIp":anyObject.host_computer.public_ip, "router":get_router(anyObject.host_computer.public_ip)}
-    if typeof(anyObject) == "computer" then return {"localIp":anyObject.local_ip, "publicIp":anyObject.public_ip, "router":get_router(anyObject.public_ip)}
-    if is_lan_ip(targetIp) then return {"localIp":targetIp, "publicIp":currentRouter.public_ip, "router":currentRouter}
-    targetRouter = get_router(targetIp)
-    if not targetRouter then return null
-    targetPortObject = targetRouter.ping_port(targetPort)
-    if targetPortObject then return {"localIp":targetPortObject.get_lan_ip, "publicIp":targetIp, "router":targetRouter}
-    return {"localIp":targetRouter.local_ip, "publicIp":targetIp, "router":targetRouter}
-end function
-libs.corruptLog = function(fileObject) //overwrite system.log by copy the smallest file to that dir
-    if not fileObject then fileObject = current.folder
-    while fileObject.parent
-        fileObject = fileObject.parent
-    end while
-    files = self.allFiles(fileObject, 3)
-    toCopy = null
-    for file in files
-        if file.is_folder or (not file.has_permission("r")) then continue
-        if not toCopy then toCopy = file
-        if val(file.size) < val(toCopy.size) then toCopy = file
-    end for
-    if not toCopy then return print("No file to overwrite log! try using ""touch"".")
-    logFile = self.getFile("/var/system.log", fileObject)
-    if not logFile then return print("log file not found!")
-    tryDelete = logFile.delete
-    if tryDelete == "" then print("Log file deleted.") else return print("Error: " + tryDelete)
-    tryCopy = toCopy.copy("/var", "system.log")
-    if tryCopy == true then return print("All steps done. Log cleared.")
-    return print(tryCopy)
-end function
-libs.fileSize = function(bytes) //translate byte to kb and mb
-    bytes = bytes.to_int
-    i = 0
-    units = ["B","KB","MB","GB","TB","PT"]
-    while bytes > 1024
-        bytes = bytes / 1024
-        i = i + 1
-    end while
-    return round(bytes, 2) + units[i]
-end function
-libs.scanLib = function(metaLib, metaxploit)
-    if not metaLib then return null
-    if not metaxploit then metaxploit = globals.metaxploit
-    ret = {}
-    ret.lib_name = metaLib.lib_name
-    ret.version = metaLib.version
-    ret.memorys = {}
-    memorys = metaxploit.scan(metaLib)
-    for memory in memorys
-        addresses = metaxploit.scan_address(metaLib, memory).split("Unsafe check:")
-        ret.memorys[memory] = []
-        for address in addresses
-            if address == addresses[0] then continue
-            value = address[address.indexOf("<b>")+3:address.indexOf("</b>")]
-            value = value.replace("\n", "")
-            ret.memorys[memory] = ret.memorys[memory] + [value]
-        end for
-    end for
-    return ret
-end function
-libs.typeofFile = function(fileObject)
-    if not typeof(fileObject) == "file" then return null
-    if fileObject.is_folder then return "fld"
-    if fileObject.is_binary then return "bin"
-    return "txt"
-end function
-libs.bruteforce = function(length, charset, username)
-    toDo = [""]
-    while toDo
-        item = toDo.pop
-        for chr in charset
-            newItem = item + chr
-            if get_shell(username, newItem) then return get_shell(username, newItem)
-            if newItem.len < length then toDo.push(newItem)
-        end for
-    end while
-    return null
-end function
-
 computerCommands = {}
 computerCommands["ps"] = {"name":"ps", "description":"List processes running.", "args":""}
 computerCommands["ps"]["run"] = function(args)
@@ -282,7 +87,7 @@ end function
 computerCommands["touch"] = {"name":"touch", "description":"Create a text file.", "args":"[file_path]"}
 computerCommands["touch"]["run"] = function(args)
     if args.len < 1 then return print("Usage: touch [file_name]")
-    path = libs.absolutePath(args[0], current.folder.path)
+    path = absolutePath(args[0], current.folder.path)
     if path == null then return print("path not found")
     parent = parent_path(path)
     name = path.split("/")[-1]
@@ -294,7 +99,7 @@ end function
 computerCommands["mkdir"] = {"name":"mkdir", "description":"Create a empty folder.", "args":"[folder_path]"}
 computerCommands["mkdir"]["run"] = function(args)
     if args.len < 1 then return print("Usage: mkdir [folder_path]")
-    path = libs.absolutePath(args[0], current.folder.path)
+    path = absolutePath(args[0], current.folder.path)
     if path == null then return print("path not found")
     parent = parent_path(path)
     name = path.split("/")[-1]
@@ -537,7 +342,7 @@ end if
         if @unsecureVariables["key"] == "__isa" or @unsecureVariables["key"] == "classID" then continue
         if version(@unsecureVariables["value"]) then
             metaLib = @unsecureVariables["value"]
-            exploits = libs.scanLib(metaLib, metaxploit) //This is the full local version.
+            exploits = scanLib(metaLib, metaxploit) //This is the full local version.
             injectArg = user_input("inject password: ")
             for e in exploits.memorys
                 print("<color=red>" + e.key + "</color>")
@@ -545,12 +350,12 @@ end if
                     print(char(9) + "<color=white>" + value + "</color>")
                     object = metaLib.overflow(e.key, value, injectArg)
                     if (typeof(object) != "shell") and (typeof(object) != "computer") and (typeof(object) != "file") then continue
-                    result = {"object":object, "user":libs.checkAccess(libs.toFile(object)), "addr":e.key, "valn":value, "localIp":current.lanIp, "publicIp":current.publicIp, "router":current.router}
+                    result = {"object":object, "user":checkAccess(toFile(object)), "addr":e.key, "valn":value, "localIp":current.lanIp, "publicIp":current.publicIp, "router":current.router}
                     objects.push(result)
                 end for
             end for
         end if
-        if host_computer(@unsecureVariables["value"]) or File(@unsecureVariables["value"], "/") or (size(@unsecureVariables["value"]) != null) then globals.objects.push({"object":unsecureVariables["value"], "user":libs.checkAccess(libs.toFile(unsecureVariables["value"])), "localIp":current.lanIp, "publicIp":current.publicIp, "router":current.router})
+        if host_computer(@unsecureVariables["value"]) or File(@unsecureVariables["value"], "/") or (size(@unsecureVariables["value"]) != null) then globals.objects.push({"object":unsecureVariables["value"], "user":checkAccess(toFile(unsecureVariables["value"])), "localIp":current.lanIp, "publicIp":current.publicIp, "router":current.router})
     end for
     return null
 end function
@@ -572,7 +377,7 @@ commands["re"]["run"] = function(args)
     if not metaLib then return print("Unable to dump lib.")
     forceLocal = false
     while true
-        exploits = libs.scanLib(metaLib, metaxploit) //This is the full local version.
+        exploits = scanLib(metaLib, metaxploit) //This is the full local version.
         if not exploits then return print("Unable to scan for exploits.")
         results = []
         for e in exploits.memorys
@@ -581,9 +386,9 @@ commands["re"]["run"] = function(args)
                 print(char(9) + "<color=white>" + value + "</color>")
                 object = metaLib.overflow(e.key, value, injectArg)
                 if (typeof(object) != "shell") and (typeof(object) != "computer") and (typeof(object) != "file") then continue
-                ips = libs.checkIp(object, targetIp, targetPort, current.router)
+                ips = checkIp(object, targetIp, targetPort, current.router)
                 if not ips then continue
-                result = {"object":object, "user":libs.checkAccess(libs.toFile(object)), "addr":e.key, "valn":value, "localIp":ips.localIp, "publicIp":ips.publicIp, "router":ips.router}
+                result = {"object":object, "user":checkAccess(toFile(object)), "addr":e.key, "valn":value, "localIp":ips.localIp, "publicIp":ips.publicIp, "router":ips.router}
                 results.push(result)
             end for
         end for
@@ -615,7 +420,7 @@ commands["lo"]["run"] = function(args)
     if not metaLib then return print("Unable to load lib.")
     forceLocal = false
     while true
-        exploits = libs.scanLib(metaLib, metaxploit) //This is the full local version.
+        exploits = scanLib(metaLib, metaxploit) //This is the full local version.
         if not exploits then return print("Unable to scan for exploits.")
         results = []
         for e in exploits.memorys
@@ -627,7 +432,7 @@ commands["lo"]["run"] = function(args)
                 if typeof(object) == "shell" then localIp = object.host_computer.local_ip
                 if typeof(object) == "computer" then localIp = object.local_ip
                 if typeof(object) == "file" then localIp = current.lanIp
-                result = {"object":object, "user":libs.checkAccess(libs.toFile(object)), "addr":e.key, "valn":value, "localIp":localIp, "publicIp":current.publicIp, "router":current.router}
+                result = {"object":object, "user":checkAccess(toFile(object)), "addr":e.key, "valn":value, "localIp":localIp, "publicIp":current.publicIp, "router":current.router}
                 results.push(result)
             end for
         end for
@@ -656,7 +461,7 @@ commands["rshell"]["run"] = function(args)
         rshells = metaxploit.rshell_server
         if typeof(rshells) == "string" then return print(rshells)
     for object in rshells
-        objects.push({"object":object, "user":libs.checkAccess(libs.toFile(object)), "localIp":object.host_computer.local_ip, "publicIp":object.host_computer.public_ip, "router":get_router(object.host_computer.public_ip)})
+        objects.push({"object":object, "user":checkAccess(toFile(object)), "localIp":object.host_computer.local_ip, "publicIp":object.host_computer.public_ip, "router":get_router(object.host_computer.public_ip)})
     end for
     print(rshells.len + " active rshells added to list. Use with ""objects"" command.")
     return null
@@ -674,7 +479,7 @@ commands["objects"]["run"] = function(args)
     globals.current.obj = objects[select].object
     globals.current.router = objects[select].router
     globals.current.lanIp = objects[select].localIp
-    globals.current.folder = libs.toFile(objects[select].object)
+    globals.current.folder = toFile(objects[select].object)
     globals.current.user = objects[select].user
     globals.current.isLocal = false
     return print("Done.")
@@ -734,14 +539,14 @@ commands["cd"]["run"] = function(args)
             if current.folder.parent then globals.current.folder = current.folder.parent
             return null
         end if
-        toPath = libs.absolutePath(args[0], current.folder.path)
+        toPath = absolutePath(args[0], current.folder.path)
         if not toPath then return null
     end if
     folderObj = current.folder
     while folderObj.parent
         folderObj = folderObj.parent
     end while
-    toFolder = libs.changeDir(toPath, folderObj)
+    toFolder = changeDir(toPath, folderObj)
     if not typeof(toFolder) == "file" then
         if args.len < 1 then globals.current.folder = folderObj else print("No such directory.")
         return null
@@ -752,13 +557,13 @@ commands["cd"]["run"] = function(args)
 end function
 commands["ls"] = {"name":"ls", "description":"List all files.", "args":"[(opt) path]"}
 commands["ls"]["run"] = function(args)
-    if args.len == 0 then toPath = current.folder.path else toPath = libs.absolutePath(args[0], current.folder.path)
+    if args.len == 0 then toPath = current.folder.path else toPath = absolutePath(args[0], current.folder.path)
     if not toPath then return print("No such directory.")
     folderObj = current.folder
     while folderObj.parent
         folderObj = folderObj.parent
     end while
-    toFolder = libs.changeDir(toPath, folderObj)
+    toFolder = changeDir(toPath, folderObj)
     if not typeof(toFolder) == "file" then return print("No such directory.")
     if not toFolder.is_folder then return print("No such directory.")
     subFiles = toFolder.get_folders + toFolder.get_files
@@ -777,7 +582,7 @@ commands["ls"]["run"] = function(args)
         if subFile.has_permission("w") then WRX = WRX + "w" else WRX = WRX + "-"
         if subFile.has_permission("r") then WRX = WRX + "r" else WRX = WRX + "-"
         if subFile.has_permission("x") then WRX = WRX + "x" else WRX = WRX + "-"
-        output = output + "\n" + subFile + ">" + nameFile + " [" + type + "] [" + WRX + "] [" + libs.fileSize(size) + "] [" + permission + "] [" + owner + "] [" + group + "]"
+        output = output + "\n" + subFile + ">" + nameFile + " [" + type + "] [" + WRX + "] [" + fileSize(size) + "] [" + permission + "] [" + owner + "] [" + group + "]"
     end for
     output = format_columns(output)
     print(output)
@@ -827,7 +632,7 @@ commands["secure"]["run"] = function(args)
     while fileObject.parent
         fileObject = fileObject.parent
     end while
-    rootFolder = libs.getFile("/root", fileObject)
+    rootFolder = getFile("/root", fileObject)
     if not rootFolder then return print("/root not found.")
     rootFolder.set_group("root", true)
     rootFolder.set_owner("root", true)
@@ -843,11 +648,11 @@ commands["vuln"]["run"] = function(args)
     while rootFile.parent
         rootFile = rootFile.parent
     end while
-    allFiles = libs.allFiles(rootFile, maxDepth)
+    allFiles = allFiles(rootFile, maxDepth)
     files = []
     for file in allFiles
         if file.has_permission("r") or file.has_permission("w") or file.has_permission("x") then
-            files = files + [libs.typeofFile(file) + " " + file.path + " " + file.permissions]
+            files = files + [typeofFile(file) + " " + file.path + " " + file.permissions]
         end if
     end for
     output = files.sort.join("\n")
@@ -856,9 +661,9 @@ end function
 commands["text"] = {"name":"text", "description":"Text Editor. Will clear screen to display text.", "args":"[path_to_text]"}
 commands["text"]["run"] = function(args)
     if args.len < 1 then return print("Invalid arguments!")
-    pathText = libs.absolutePath(args[0], current.folder.path)
+    pathText = absolutePath(args[0], current.folder.path)
     if not pathText then return print("File not found.")
-    textFile = libs.getFile(pathText)
+    textFile = getFile(pathText)
     if not textFile then return print("File not found.")
     if textFile.is_binary or textFile.is_folder then return print("File not text.")
     text = textFile.get_content
@@ -913,10 +718,10 @@ commands["find"] = {"name":"find", "description":"Find a file with its name.", "
 commands["find"]["run"] = function(args)
     if args.len < 1 then return print("Usage: find [file]")
     fileName = args[0]
-    files = libs.find(fileName)
+    files = find(fileName)
     output = []
     for file in files
-        output = output + [libs.typeofFile(file) + " " + file.path]
+        output = output + [typeofFile(file) + " " + file.path]
     end for
     output = output.sort.join("\n")
     return print(output)
@@ -928,9 +733,9 @@ commands["cat"]["run"] = function(args)
     while folderObj.parent
         folderObj = folderObj.parent
     end while
-    toPath = libs.absolutePath(args[0], current.folder.path)
+    toPath = absolutePath(args[0], current.folder.path)
     if not toPath then return print("No file specified.")
-    toPrint = libs.getFile(toPath, folderObj)
+    toPrint = getFile(toPath, folderObj)
     if not typeof(toPrint) == "file" then return print("File not found: " + toPath)
     if not toPrint.has_permission("r") then return print("Permission denied.") //check perm
     if toPrint.is_binary or toPrint.is_folder then return print("File not text file.")
@@ -943,18 +748,18 @@ commands["chmod"]["run"] = function(args)
         folderObj = folderObj.parent
     end while
     if args.len == 2 then
-        toPath = libs.absolutePath(args[1], current.folder.path)
+        toPath = absolutePath(args[1], current.folder.path)
         isRecursive = false
         perm = args[0]
     else if args.len == 3 then
-        toPath = libs.absolutePath(args[2], current.folder.path)
+        toPath = absolutePath(args[2], current.folder.path)
         isRecursive = true
         perm = args[1]
     else
         return print("Usage: chmod [(opt) -R] [ugo+-rwx] [path]")
     end if
     if not toPath then return print("No file specified.")
-    toChmod = libs.getFile(toPath, folderObj)
+    toChmod = getFile(toPath, folderObj)
     if not typeof(toChmod) == "file" then return print("File not found: " + toPath)
     users = []
     if perm.indexOf("u") != null then users.push("u")
@@ -985,18 +790,18 @@ commands["chgrp"]["run"] = function(args)
         folderObj = folderObj.parent
     end while
     if args.len == 2 then
-        toPath = libs.absolutePath(args[1], current.folder.path)
+        toPath = absolutePath(args[1], current.folder.path)
         isRecursive = false
         grp = args[0]
     else if args.len == 3 then
-        toPath = libs.absolutePath(args[2], current.folder.path)
+        toPath = absolutePath(args[2], current.folder.path)
         isRecursive = true
         grp = args[1]
     else
         return print("Usage: chgrp [(opt) -R] [group] [path]")
     end if
     if not toPath then return print("No file specified.")
-    toChgrp = libs.getFile(toPath, folderObj)
+    toChgrp = getFile(toPath, folderObj)
     if not typeof(toChgrp) == "file" then return print("File not found: " + toPath)
     doChgrp = toChgrp.set_group(grp, isRecursive)
     if doChgrp then return print(doChgrp)
@@ -1009,18 +814,18 @@ commands["chown"]["run"] = function(args)
         folderObj = folderObj.parent
     end while
     if args.len == 2 then
-        toPath = libs.absolutePath(args[1], current.folder.path)
+        toPath = absolutePath(args[1], current.folder.path)
         isRecursive = false
         user = args[0]
     else if args.len == 3 then
-        toPath = libs.absolutePath(args[2], current.folder.path)
+        toPath = absolutePath(args[2], current.folder.path)
         isRecursive = true
         user = args[1]
     else
         return print("Usage: chown [(opt) -R] [owner] [path]")
     end if
     if not toPath then return print("No file specified.")
-    toChown = libs.getFile(toPath, folderObj)
+    toChown = getFile(toPath, folderObj)
     if not typeof(toChown) == "file" then return print("File not found: " + toPath)
     doChown = toChown.set_owner(user, isRecursive)
     if doChown then return print(doChown)
@@ -1033,10 +838,10 @@ commands["cp"]["run"] = function(args)
     while folderObj.parent
         folderObj = folderObj.parent
     end while
-    fromPath = libs.absolutePath(args[0], current.folder.path)
-    toPath = libs.absolutePath(args[1], current.folder.path)
+    fromPath = absolutePath(args[0], current.folder.path)
+    toPath = absolutePath(args[1], current.folder.path)
     if (not fromPath) or (not toPath) then return print("No file specified.")
-    toCopy = libs.getFile(fromPath, folderObj)
+    toCopy = getFile(fromPath, folderObj)
     if not typeof(toCopy) == "file" then return print("File not found: " + toPath)
     paths = toPath.split("/")
     toPathList = []
@@ -1057,10 +862,10 @@ commands["mv"]["run"] = function(args)
     while folderObj.parent
         folderObj = folderObj.parent
     end while
-    fromPath = libs.absolutePath(args[0], current.folder.path)
-    toPath = libs.absolutePath(args[1], current.folder.path)
+    fromPath = absolutePath(args[0], current.folder.path)
+    toPath = absolutePath(args[1], current.folder.path)
     if (not fromPath) or (not toPath) then return print("No file specified.")
-    toMove = libs.getFile(fromPath, folderObj)
+    toMove = getFile(fromPath, folderObj)
     if not typeof(toMove) == "file" then return print("File not found: " + toPath)
     paths = toPath.split("/")
     toPathList = []
@@ -1081,9 +886,9 @@ commands["rm"]["run"] = function(args)
     while folderObj.parent
         folderObj = folderObj.parent
     end while
-    toPath = libs.absolutePath(args[0], current.folder.path)
+    toPath = absolutePath(args[0], current.folder.path)
     if not toPath then return print("No file specified.")
-    toDelete = libs.getFile(toPath, folderObj)
+    toDelete = getFile(toPath, folderObj)
     if not typeof(toDelete) == "file" then return print("File not found: " + toPath)
     if not toDelete.has_permission("w") then return print("Permission denied.") //check perm
     toDelete.delete //delete file
@@ -1118,7 +923,8 @@ commands["hash"]["run"] = function(args)
 end function
 commands["clog"] = {"name":"clog", "description":"Clear log.", "args":""}
 commands["clog"]["run"] = function(args)
-    tryClearLog = libs.corruptLog(current.folder)
+    print(current.folder)
+    tryClearLog = corruptLog(current.folder)
     if not tryClearLog then return print("Failed.")
     return print("Done.")
 end function
