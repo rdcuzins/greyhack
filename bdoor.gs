@@ -1,6 +1,6 @@
 if params.len != 1 or params[0] != #envar ZSH_PASS then exit 
 
-RSHELL_SERVER = "1.24.143.147"
+RSHELL_SERVER = #envar RSHELL_SERVER
 
 metax = include_lib("/lib/metaxploit.so")
 if not metax then metax = include_lib(current_path + "metaxploit.so")
